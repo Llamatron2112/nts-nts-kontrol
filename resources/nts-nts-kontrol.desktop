@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=nts-nts-kontrol
+Comment=Native NTS-1 mkII librarian and editor
+Exec=nts-nts-kontrol
+Icon=nts-nts-kontrol
+Terminal=false
+Categories=AudioVideo;Audio;Midi;Utility;
+Keywords=KORG;NTS-1;mkII;MIDI;librarian;
+StartupWMClass=nts-nts-kontrol

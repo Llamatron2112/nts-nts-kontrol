@@ -1,0 +1,30 @@
+# Build trees
+build/
+build-*/
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+CTestTestfile.cmake
+compile_commands.json
+
+# Packaging outputs
+*.rpm
+*.src.rpm
+nts-nts-kontrol-*.tar.*
+
+# Editor and OS files
+*~
+*.swp
+*.swo
+.idea/
+.vscode/
+.cache/
+.DS_Store
+Thumbs.db
+
+# Application and test data
+*.user
+*.autosave
+*.nts1mkii
+*.nts1mkiiprog
+*.nts1mkiiunit

@@ -1,0 +1,5 @@
+<RCC>
+  <qresource prefix="/icons">
+    <file>nts-nts-kontrol.svg</file>
+  </qresource>
+</RCC>
