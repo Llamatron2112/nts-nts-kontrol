@@ -91,13 +91,32 @@ private slots:
         QCOMPARE(fields.first().key, QStringLiteral("input_route"));
         QCOMPARE(fields.first().offset, 4);
         const GlobalField *midi = nullptr;
+        const GlobalField *gain = nullptr;
         for (const GlobalField &field : fields) {
             if (field.key == QStringLiteral("midi_channel"))
                 midi = &field;
+            if (field.key == QStringLiteral("input_gain"))
+                gain = &field;
         }
         QVERIFY(midi != nullptr);
         QCOMPARE(midi->offset, 15);
         QCOMPARE(midi->displayOffset, 1);
+
+        QVERIFY(gain != nullptr);
+        QCOMPARE(gain->offset, 6);
+        QCOMPARE(gain->enumNames.size(), 16);
+        QCOMPARE(gain->maximum, 15);
+        QCOMPARE(gain->enumNames.at(10), QStringLiteral("0 dB"));
+        QCOMPARE(gain->enumNames.last(), QStringLiteral("9 dB"));
+
+        GlobalData data = GlobalData::fromDeviceBytes(GlobalData::defaultDeviceData());
+        QCOMPARE(data.midiRoute(), 0);
+        QVERIFY(!data.usbMidiDisabled());
+        QCOMPARE(data.midiChannel(), 0);
+        data.setValue(14, 2);
+        QVERIFY(data.usbMidiDisabled());
+        data.setValue(15, 5);
+        QCOMPARE(data.midiChannel(), 5);
     }
 
     void sysExAssemblerIgnoresRealtime()

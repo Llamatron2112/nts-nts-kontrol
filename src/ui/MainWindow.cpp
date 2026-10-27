@@ -41,6 +41,14 @@ struct TaskResult {
     QString error;
 };
 
+QString deviceLabel(const DeviceInfo &device)
+{
+    return QStringLiteral("%1  ·  MIDI ch %2  ·  SDK %3")
+        .arg(device.displayName())
+        .arg(device.channel + 1)
+        .arg(device.versionString());
+}
+
 } // namespace
 
 MainWindow::MainWindow(QWidget *parent)
@@ -240,12 +248,8 @@ void MainWindow::refreshDevices()
 
         m_deviceCombo->blockSignals(true);
         m_deviceCombo->clear();
-        for (const DeviceInfo &device : m_devices) {
-            m_deviceCombo->addItem(QStringLiteral("%1  ·  MIDI ch %2  ·  SDK %3")
-                                       .arg(device.displayName())
-                                       .arg(device.channel + 1)
-                                       .arg(device.versionString()));
-        }
+        for (const DeviceInfo &device : m_devices)
+            m_deviceCombo->addItem(deviceLabel(device));
         m_deviceCombo->blockSignals(false);
 
         if (m_devices.isEmpty()) {
@@ -293,6 +297,37 @@ void MainWindow::updateDeviceStatus()
                                 .arg(m_selectedDevice.channel + 1)
                                 .arg(m_selectedDevice.versionString()));
     m_deviceStatus->setStyleSheet(QStringLiteral("color: #7bbf6a;"));
+}
+
+void MainWindow::updateDeviceChannel(int channel)
+{
+    if (!m_selectedDevice.valid || channel < 0 || channel > 15)
+        return;
+
+    const int index = m_deviceCombo->currentIndex();
+    if (index >= 0 && index < m_devices.size()) {
+        m_devices[index].channel = channel;
+        m_deviceCombo->blockSignals(true);
+        m_deviceCombo->setItemText(index, deviceLabel(m_devices.at(index)));
+        m_deviceCombo->blockSignals(false);
+    }
+    m_selectedDevice.channel = channel;
+    updateDeviceStatus();
+}
+
+void MainWindow::markTransportLost()
+{
+    m_devices.clear();
+    m_deviceCombo->blockSignals(true);
+    m_deviceCombo->clear();
+    m_deviceCombo->blockSignals(false);
+    m_deviceCombo->setCurrentIndex(-1);
+    m_selectedDevice = DeviceInfo {};
+    updateDeviceStatus();
+    statusBar()->showMessage(
+        QStringLiteral("Global data written. USB MIDI is now disabled; change MIDI "
+                       "Route on the NTS-1 mkII and click Refresh."),
+        12000);
 }
 
 void MainWindow::autoReceiveStartupData()
@@ -460,9 +495,9 @@ void MainWindow::showAbout()
                        "affiliated with KORG Inc.</p>"));
 }
 
-bool MainWindow::confirmWrite(const QString &description)
+bool MainWindow::confirmWrite(const QString &description, bool force)
 {
-    if (!m_warnBeforeWrite)
+    if (!force && !m_warnBeforeWrite)
         return true;
     return QMessageBox::question(this, QStringLiteral("Confirm Write"),
                                  description + QStringLiteral("\n\nWrite to the device?"),
@@ -527,8 +562,10 @@ void MainWindow::runDeviceTask(const QString &title, const TaskFn &task,
             [this, watcher, dialogGuard, onSuccess] {
                 const TaskResult result = watcher->result();
                 watcher->deleteLater();
-                if (dialogGuard)
+                if (dialogGuard) {
+                    dialogGuard->close();
                     dialogGuard->deleteLater();
+                }
                 setBusy(false);
                 if (!result.ok) {
                     QMessageBox::critical(this, QStringLiteral("nts-nts-kontrol"),
@@ -675,14 +712,23 @@ void MainWindow::sendAllData()
     const Program program = m_workspace.currentProgram();
     const bool hasGlobal = m_workspace.global().isValid();
     const QByteArray global = hasGlobal ? m_workspace.global().deviceBytes() : QByteArray();
+    const GlobalData globalData = GlobalData::fromDeviceBytes(global);
     const UnitLibrary units = m_workspace.units();
     if (!program.isValid() && !m_workspace.global().isValid()) {
         QMessageBox::information(this, QStringLiteral("Send All Data"),
                                  QStringLiteral("There is no device data to send."));
         return;
     }
-    if (!confirmWrite(QStringLiteral("Write the current program, global data, and all "
-                                     "non-empty user units to the NTS-1 mkII?")))
+
+    QString prompt = QStringLiteral("Write the current program, global data, and all "
+                                    "non-empty user units to the NTS-1 mkII?");
+    if (globalData.usbMidiDisabled()) {
+        prompt += QStringLiteral(
+            "\n\nWARNING: MIDI Route is set to MIDI only. The global block is "
+            "written last, but USB MIDI will then be disabled and the editor "
+            "will lose its connection.");
+    }
+    if (!confirmWrite(prompt, globalData.usbMidiDisabled()))
         return;
 
     runDeviceTask(
@@ -704,11 +750,6 @@ void MainWindow::sendAllData()
                     return false;
                 progress(++step, total);
             }
-            if (!global.isEmpty()) {
-                if (!session.sendGlobal(global, error))
-                    return false;
-                progress(++step, total);
-            }
             for (Module module : {Module::Osc, Module::ModFx, Module::DelFx, Module::RevFx}) {
                 const QVector<UserUnit> &source = units.forModule(module);
                 for (int slot = 0; slot < source.size(); ++slot) {
@@ -725,9 +766,22 @@ void MainWindow::sendAllData()
                     progress(++step, total);
                 }
             }
+            // Send global last: MIDI Route = MIDI only disables the USB
+            // transport used for everything above.
+            if (!global.isEmpty()) {
+                if (!session.sendGlobal(global, error))
+                    return false;
+                progress(++step, total);
+            }
             return true;
         },
-        [this] { statusBar()->showMessage(QStringLiteral("All data sent"), 4000); });
+        [this, globalData] {
+            if (globalData.usbMidiDisabled()) {
+                markTransportLost();
+                return;
+            }
+            statusBar()->showMessage(QStringLiteral("All data sent"), 4000);
+        });
 }
 
 void MainWindow::receiveUnitModule(Module module)
@@ -869,14 +923,29 @@ void MainWindow::sendGlobal()
         return;
     }
     const QByteArray global = m_workspace.global().deviceBytes();
-    if (!confirmWrite(QStringLiteral("Write the global settings to the NTS-1 mkII?")))
+    const GlobalData data = GlobalData::fromDeviceBytes(global);
+    QString prompt = QStringLiteral("Write the global settings to the NTS-1 mkII?");
+    if (data.usbMidiDisabled()) {
+        prompt += QStringLiteral(
+            "\n\nWARNING: MIDI Route is set to MIDI only. This disables USB MIDI, "
+            "so the editor will lose its connection until MIDI Route is changed "
+            "back on the device.");
+    }
+    if (!confirmWrite(prompt, data.usbMidiDisabled()))
         return;
     runDeviceTask(
         QStringLiteral("Writing global data…"),
         [global](DeviceSession &session, QString *error, const ProgressFn &) {
             return session.sendGlobal(global, error);
         },
-        [this] { statusBar()->showMessage(QStringLiteral("Global data written"), 4000); });
+        [this, data] {
+            if (data.usbMidiDisabled()) {
+                markTransportLost();
+                return;
+            }
+            updateDeviceChannel(data.midiChannel());
+            statusBar()->showMessage(QStringLiteral("Global data written"), 4000);
+        });
 }
 
 UnitPage *MainWindow::currentUnitPage() const

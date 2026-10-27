@@ -42,6 +42,10 @@ public:
     int value(int offset) const;
     void setValue(int offset, int value);
 
+    int midiRoute() const;
+    bool usbMidiDisabled() const;
+    int midiChannel() const;
+
     static QList<GlobalField> fields();
 
 private:

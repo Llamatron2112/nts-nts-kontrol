@@ -48,6 +48,8 @@ private:
     void refreshDevices();
     void onDeviceSelected(int index);
     void updateDeviceStatus();
+    void updateDeviceChannel(int channel);
+    void markTransportLost();
     void autoReceiveStartupData();
 
     void setWorkspace(const Workspace &workspace);
@@ -63,7 +65,7 @@ private:
     void showPreferences();
     void showAbout();
 
-    bool confirmWrite(const QString &description);
+    bool confirmWrite(const QString &description, bool force = false);
     void showError(const QString &title, const QString &message);
 
     void runDeviceTask(const QString &title, const TaskFn &task,

@@ -171,6 +171,9 @@ int cmdGlobal(const QCommandLineParser &parser)
             return 1;
         }
         const QByteArray global = file.readAll();
+        const GlobalData data = GlobalData::fromDeviceBytes(global);
+        if (data.usbMidiDisabled())
+            err() << "Warning: MIDI Route is MIDI only; USB MIDI will be disabled.\n";
         if (!session.sendGlobal(global, &error)) {
             err() << error << "\n";
             return 1;

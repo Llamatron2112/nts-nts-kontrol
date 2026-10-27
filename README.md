@@ -80,6 +80,12 @@ PipeWire is running. Auto therefore selects PipeWire when the NTS-1 is exposed t
 The backend can be selected in **Edit → Preferences → MIDI backend** or with
 `nts-nts-kontrol-cli --backend auto|pipewire|alsa`.
 
+### MIDI Route and USB MIDI
+
+Setting **MIDI Route** to **MIDI** disables the NTS-1 mkII's USB MIDI port. The
+editor warns before writing, then loses its USB connection. Change MIDI Route
+back on the device and click **Refresh** to reconnect.
+
 ### Permissions
 
 The PipeWire backend needs access to the user's PipeWire session. The raw ALSA fallback

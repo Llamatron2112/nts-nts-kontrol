@@ -72,18 +72,35 @@ void GlobalData::setValue(int offset, int value)
     m_device[offset] = char(value & 0xff);
 }
 
+int GlobalData::midiRoute() const
+{
+    return value(14);
+}
+
+bool GlobalData::usbMidiDisabled() const
+{
+    // 0 = USB+MIDI, 1 = USB, 2 = MIDI only.
+    return midiRoute() == 2;
+}
+
+int GlobalData::midiChannel() const
+{
+    return value(15);
+}
+
 QList<GlobalField> GlobalData::fields()
 {
     // The NTS-1 mkII global blob is: "GLOB" + 15 one-byte settings +
     // reserved 0xFF bytes + "GLED". Offsets below refer to the full 32-byte blob.
     QList<GlobalField> fields;
     auto add = [&fields](int offset, const QString &key, const QString &label,
-                         const QStringList &options) {
+                         const QStringList &options, const QString &help = {}) {
         GlobalField field;
         field.offset = offset;
         field.key = key;
         field.label = label;
         field.enumNames = options;
+        field.help = help;
         if (!options.isEmpty()) {
             field.minimum = 0;
             field.maximum = options.size() - 1;
@@ -102,7 +119,9 @@ QList<GlobalField> GlobalData::fields()
         {QStringLiteral("-85 dB"), QStringLiteral("-36 dB"), QStringLiteral("-24 dB"),
          QStringLiteral("-18 dB"), QStringLiteral("-12 dB"), QStringLiteral("-9 dB"),
          QStringLiteral("-6 dB"), QStringLiteral("-3 dB"), QStringLiteral("-2 dB"),
-         QStringLiteral("-1 dB"), QStringLiteral("0 dB")});
+         QStringLiteral("-1 dB"), QStringLiteral("0 dB"), QStringLiteral("1 dB"),
+         QStringLiteral("2 dB"), QStringLiteral("3 dB"), QStringLiteral("6 dB"),
+         QStringLiteral("9 dB")});
     add(7, QStringLiteral("monaural"), QStringLiteral("Monaural"),
         {QStringLiteral("OFF"), QStringLiteral("MONAURAL")});
     add(8, QStringLiteral("sync_out_polarity"), QStringLiteral("Sync Out Polarity"),
@@ -118,7 +137,9 @@ QList<GlobalField> GlobalData::fields()
     add(13, QStringLiteral("nrpn_messages"), QStringLiteral("NRPN Messages"),
         {QStringLiteral("OFF"), QStringLiteral("ON")});
     add(14, QStringLiteral("midi_route"), QStringLiteral("MIDI Route"),
-        {QStringLiteral("USB+MIDI"), QStringLiteral("USB"), QStringLiteral("MIDI")});
+        {QStringLiteral("USB+MIDI"), QStringLiteral("USB"), QStringLiteral("MIDI")},
+        QStringLiteral("MIDI disables USB MIDI. The editor will lose its "
+                       "connection until MIDI Route is changed on the device."));
     {
         GlobalField midi;
         midi.offset = 15;

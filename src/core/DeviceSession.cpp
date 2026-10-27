@@ -473,9 +473,28 @@ bool DeviceSession::sendGlobal(const QByteArray &global, QString *error)
             *error = QStringLiteral("The global data is not valid.");
         return false;
     }
-    const QByteArray message = globalDump(quint8(m_info.channel), global);
+
+    const GlobalData data = GlobalData::fromDeviceBytes(global);
+    const int oldChannel = m_info.channel;
+    const int newChannel = data.midiChannel();
+    const QByteArray message = globalDump(quint8(oldChannel), global);
     if (!sendNoAck(message, error))
         return false;
+
+    // MIDI Route = MIDI only turns off the USB MIDI port this session is
+    // using, so the device cannot acknowledge or read back over USB. The
+    // write itself is still valid; treat it as fire-and-forget.
+    if (data.usbMidiDisabled()) {
+        m_info.channel = newChannel;
+        QThread::msleep(200);
+        return true;
+    }
+
+    if (newChannel != oldChannel) {
+        // The device switches channels as soon as it stores the block.
+        m_info.channel = newChannel;
+        QThread::msleep(120);
+    }
 
     for (int attempt = 0; attempt < 4; ++attempt) {
         QThread::msleep(80);
@@ -483,6 +502,13 @@ bool DeviceSession::sendGlobal(const QByteArray &global, QString *error)
         QString readError;
         if (receiveGlobal(&check, &readError) && check == global)
             return true;
+    }
+
+    // The write may not have applied. Re-discover the channel so a failed
+    // verification does not leave the session on a stale channel.
+    if (newChannel != oldChannel) {
+        QString ignored;
+        identify(&ignored);
     }
     if (error)
         *error = QStringLiteral("The device did not store the global data.");
