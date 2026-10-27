@@ -1,5 +1,5 @@
 Name:           nts-nts-kontrol
-Version:        0.1.0
+Version:        0.1.1
 Release:        1%{?dist}
 Summary:        Native Linux librarian and editor for the KORG NTS-1 mkII
 
@@ -52,5 +52,10 @@ desktop-file-validate %{buildroot}%{_datadir}/applications/%{name}.desktop
 %{_datadir}/icons/hicolor/scalable/apps/%{name}.svg
 
 %changelog
+* Tue Oct 27 2026 Llamatron2112 <llamatron23@proton.me> - 0.1.1-1
+- Update to 0.1.1
+- Fix global writes that change the MIDI channel or disable USB MIDI
+- Complete the input gain range through +9 dB
+
 * Mon Oct 26 2026 Llamatron2112 <llamatron23@proton.me> - 0.1.0-1
 - Initial COPR package
